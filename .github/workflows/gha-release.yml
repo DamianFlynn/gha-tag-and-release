@@ -1,0 +1,71 @@
+name: "🧬 Pull Request Checks"
+concurrency:  # avoid concurrent runs  ¯\_(ツ)_/¯
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    branches:
+      - main
+  pull_request_target:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+
+  detect:
+    runs-on: ubuntu-latest
+    name: "Detect pull request context"
+    outputs:
+      is-merge-event: >-
+        ${{ github.event_name == 'pull_request_target'
+         && github.event.action == 'closed'
+         && github.event.pull_request.merged == true }}
+
+    steps:
+
+      # - name: Check Release Label
+      #   id: release-label
+      #   uses: ./.github/actions/release-labels
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate the SemVer
+        id: semver
+        uses: damianflynn/gha-calculate-next-semver@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check outputs from changeset
+        run: |
+          echo "release type - ${{ steps.semver.outputs.release-type }}"
+          echo "current ver - ${{ steps.semver.outputs.current-version }}"
+          echo "new ver - ${{ steps.semver.outputs.new-version }}"
+          echo "new major ver - ${{ steps.semver.outputs.new-major-version }}"
+          echo "new minor ver - ${{ steps.semver.outputs.new-minor-version }}"
+
+      # Add VERSION file to the repo
+      - name: Store version numbers
+        if: steps.semver.outcome == 'success'
+        run: |
+          echo '${{ steps.semver.outputs.new-version }}' > src/VERSION
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.6.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}        
+          
+  # merge-code:
+  #   name: "Merge the PR"
+  #   needs: detect
+  #   if: ${{ needs.detect.outputs.is-merge-event == 'true' }}
+
+  #   steps:
+  #   - name: Get the code
+  #     uses: actions/checkout@v3
+
+
+
